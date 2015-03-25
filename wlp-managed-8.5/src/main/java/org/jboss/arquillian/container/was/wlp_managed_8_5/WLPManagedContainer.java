@@ -16,11 +16,18 @@
  */
 package org.jboss.arquillian.container.was.wlp_managed_8_5;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -53,9 +60,12 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import com.sun.tools.attach.VirtualMachine;
+import com.sun.tools.attach.VirtualMachineDescriptor;
+
 /**
  * WLPManagedContainer
- *
+ * 
  * @author <a href="mailto:gerhard.poul@gmail.com">Gerhard Poul</a>
  * @version $Revision: $
  */
@@ -75,16 +85,165 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
 
     private Thread shutdownThread;
 
+    int httpPort = -1;
+
+    int httpsPort = -1;
+
+    int jmxPort = -1;
+
+    int h2Port = -1;
+
     public void setup(WLPManagedContainerConfiguration configuration) {
         if (log.isLoggable(Level.FINER)) {
             log.entering(className, "setup");
         }
-
         this.containerConfiguration = configuration;
+        if (this.containerConfiguration.getHttpPort() == 1) {
+
+            if (Boolean.TRUE.toString().equalsIgnoreCase(System.getProperty("isJenkins", "false"))) {
+                httpPort = findFreePort();
+                httpsPort = findFreePort();
+                h2Port = findFreePort();
+                this.containerConfiguration.setHttpPort(httpPort);
+                adaptEnvFile(httpPort, httpsPort, h2Port);
+            }
+        }
+        jmxPort = findFreePort();
+        adaptJvmOptionsFile(jmxPort);
 
         if (log.isLoggable(Level.FINER)) {
             log.exiting(className, "setup");
         }
+    }
+
+    private void adaptJvmOptionsFile(int jmxPort) {
+        try {
+            File jvmOptions = new File(containerConfiguration.getWlpHome() + "/usr/servers/" + containerConfiguration.getServerName() + "/jvm.options");
+            String fileContents = readFileContents(jvmOptions);
+            StringTokenizer tokens = new StringTokenizer(fileContents, "\n");
+            FileOutputStream outFile = new FileOutputStream(jvmOptions);
+            boolean jmxPortSet = false;
+            while (tokens.hasMoreTokens()) {
+                String line = tokens.nextToken();
+                if (line.startsWith("-Dcom.sun.management.jmxremote.port")) {
+                    jmxPortSet = true;
+                    writeJmxPortLine(jmxPort, outFile);
+                } else {
+                    outFile.write(line.getBytes("UTF-8"));
+                    outFile.write('\n');
+                }
+            }
+            if (!jmxPortSet) {
+                writeJmxPortLine(jmxPort, outFile);
+            }
+            outFile.close();
+        } catch (Exception e) {
+            throw new IllegalArgumentException("could not adapt jvmOptionsFile", e);
+        }
+    }
+
+    private String readFileContents(File file) throws FileNotFoundException, IOException, UnsupportedEncodingException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        FileInputStream in = new FileInputStream(file);
+        int count;
+        byte[] buffer = new byte[4096];
+        while ((count = in.read(buffer)) >= 0) {
+            out.write(buffer, 0, count);
+        }
+        in.close();
+        String fileContents = new String(out.toByteArray(), "UTF-8");
+        return fileContents;
+    }
+
+    private void writeJmxPortLine(int jmxPort, FileOutputStream outFile) throws IOException, UnsupportedEncodingException {
+        outFile.write("-Dcom.sun.management.jmxremote.port".getBytes("UTF-8"));
+        outFile.write('=');
+        outFile.write(Integer.toString(jmxPort).getBytes("UTF-8"));
+        outFile.write('\n');
+    }
+
+    private void adaptEnvFile(int httpPort, int httpsPort, int h2Port) {
+        try {
+            File envFile = new File(containerConfiguration.getWlpHome() + "/usr/servers/" + containerConfiguration.getServerName() + "/server.env");
+            String fileContents = readFileContents(envFile);
+            StringTokenizer tokens = new StringTokenizer(fileContents, "\n");
+            FileOutputStream outFile = new FileOutputStream(envFile);
+            boolean h2PortSet = false;
+            boolean httpPortSet = false;
+            boolean httpsPortSet = false;
+            while (tokens.hasMoreTokens()) {
+                String line = tokens.nextToken().trim();
+                if (line.startsWith("STAT_H2_PORT")) {
+                    h2PortSet = true;
+                    writeEnvLine("STAT_H2_PORT", Integer.toString(h2Port), outFile);
+                } else if (line.startsWith("STAT_WLP_HTTP_PORT")) {
+                    httpPortSet = true;
+                    writeEnvLine("STAT_WLP_HTTP_PORT", Integer.toString(httpPort), outFile);
+                } else if (line.startsWith("STAT_WLP_HTTPS_PORT")) {
+                    httpsPortSet = true;
+                    writeEnvLine("STAT_WLP_HTTPS_PORT", Integer.toString(httpsPort), outFile);
+                } else {
+                    outFile.write(line.getBytes("UTF-8"));
+                    outFile.write('\n');
+                }
+            }
+            if (!h2PortSet) {
+                writeEnvLine("STAT_H2_PORT", Integer.toString(h2Port), outFile);
+            }
+            if (!httpPortSet) {
+                writeEnvLine("STAT_WLP_HTTP_PORT", Integer.toString(httpPort), outFile);
+            }
+            if (!httpsPortSet) {
+                writeEnvLine("STAT_WLP_HTTPS_PORT", Integer.toString(httpsPort), outFile);
+            }
+            outFile.close();
+        } catch (Exception e) {
+            throw new IllegalArgumentException("could not adapt jvmOptionsFile", e);
+        }
+    }
+
+    private void writeEnvLine(String key, String value, FileOutputStream outFile) throws IOException, UnsupportedEncodingException {
+        if (key.startsWith("STAT")) {
+            System.setProperty(key, value);
+        }
+        outFile.write(key.getBytes("UTF-8"));
+        outFile.write('=');
+        outFile.write(value.getBytes("UTF-8"));
+        outFile.write('\n');
+    }
+
+    /**
+     * Returns a free port number on localhost. Heavily inspired from
+     * org.eclipse.jdt.launching.SocketUtil (to avoid a dependency to JDT just
+     * because of this). Slightly improved with close() missing in JDT. And
+     * throws exception instead of returning -1.
+     * 
+     * @return a free port number on localhost
+     * @throws IllegalStateException
+     *             if unable to find a free port
+     */
+    private static int findFreePort() {
+        ServerSocket socket = null;
+        try {
+            socket = new ServerSocket(0);
+            socket.setReuseAddress(true);
+            int port = socket.getLocalPort();
+            try {
+                socket.close();
+            } catch (IOException e) {
+                // Ignore IOException on close()
+            }
+            return port;
+        } catch (IOException e) {
+        } finally {
+            if (socket != null) {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                }
+            }
+        }
+        throw new IllegalStateException("Could not find a free TCP/IP port to start embedded Jetty HTTP Server on");
     }
 
     // This method includes parts heavily based on the
@@ -118,11 +277,19 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
                 // Start the WebSphere Liberty Profile VM
                 List<String> cmd = new ArrayList<String>();
 
-                String javaVmArguments = containerConfiguration.getJavaVmArguments();
+                String javaHome = System.getProperty("java.home");
+                if (javaHome.endsWith("jre")) {
+                    javaHome = javaHome.substring(0, Math.max(javaHome.lastIndexOf('/'), javaHome.lastIndexOf('\\')));
+                }
+                String javaExe = javaHome + "/bin/java";
+                if (System.getProperty("os.name").toLowerCase().indexOf("win") >= 0) {
+                    javaExe = (javaExe + "w.exe").replace('\\', '/');
+                }
+                cmd.add(javaExe);
 
-                cmd.add(System.getProperty("java.home") + "/bin/java");
-                if (!javaVmArguments.equals(""))
-                    cmd.add(javaVmArguments);
+                // serviceURL = "service:jmx:rmi:///jndi/rmi://localhost:" +
+                // jmxPort + "/jmxrmi";
+                addJvmParameter(cmd, containerConfiguration.getLaunchJvmParams());
                 cmd.add("-javaagent:lib/bootstrap-agent.jar");
                 cmd.add("-jar");
                 cmd.add("lib/ws-launch.jar");
@@ -131,6 +298,19 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
                 log.finer("Starting server with command: " + cmd.toString());
 
                 ProcessBuilder pb = new ProcessBuilder(cmd);
+                File serverEnv = new File(containerConfiguration.getWlpHome() + "/usr/servers/" + containerConfiguration.getServerName() + "/server.env");
+                if (serverEnv.exists()) {
+                    String str = readFileContents(serverEnv);
+                    StringTokenizer tokens = new StringTokenizer(str, "\n");
+                    while (tokens.hasMoreElements()) {
+                        String line = tokens.nextToken();
+                        if (line.indexOf('=') > 0) {
+                            String key = line.substring(0, line.indexOf('=')).trim();
+                            String value = line.substring(line.indexOf('=') + 1).trim();
+                            pb.environment().put(key, value);
+                        }
+                    }
+                }
                 pb.directory(new File(containerConfiguration.getWlpHome()));
                 pb.redirectErrorStream();
                 wlpProcess = pb.start();
@@ -156,6 +336,7 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
 
                 // Wait up to 30s for the server to start
                 int startupTimeout = containerConfiguration.getServerStartTimeout() * 1000;
+                int initialCount = startupTimeout;
                 while (startupTimeout > 0 && serviceURL == null) {
                     startupTimeout -= 500;
                     Thread.sleep(500);
@@ -185,6 +366,11 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
 
                     if (serviceURL == null && wlpvm != null)
                         serviceURL = getVMLocalConnectorAddress(wlpvm);
+
+                    if (serviceURL == null && (initialCount - startupTimeout) > 10000) {
+                        // after 10 seconds we try to start to agent.
+                        startAgent(wlpvm);
+                    }
                 }
 
                 // If serviceURL is still null, we were unable to start the
@@ -197,17 +383,32 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
         } catch (Exception e) {
             throw new LifecycleException("Could not start container", e);
         }
-
-        try {
-            JMXServiceURL url = new JMXServiceURL(serviceURL);
-            jmxConnector = JMXConnectorFactory.connect(url);
-            mbsc = jmxConnector.getMBeanServerConnection();
-        } catch (IOException e) {
-            throw new LifecycleException("Connecting to the JMX MBean Server failed", e);
+        int count = 0;
+        Exception exception = null;
+        while (jmxConnector == null && count < 10) {
+            count++;
+            try {
+                Thread.sleep(1000L);
+                JMXServiceURL url = new JMXServiceURL(serviceURL);
+                jmxConnector = JMXConnectorFactory.connect(url);
+                mbsc = jmxConnector.getMBeanServerConnection();
+                exception = null;
+            } catch (Exception e) {
+                exception = e;
+            }
         }
-
+        if (exception != null) {
+            throw new LifecycleException("Connecting to the JMX MBean Server failed", exception);
+        }
         if (log.isLoggable(Level.FINER)) {
             log.exiting(className, "start");
+        }
+    }
+
+    private void addJvmParameter(List<String> cmd, String launchJvmParams) {
+        StringTokenizer tokens = new StringTokenizer(launchJvmParams);
+        while (tokens.hasMoreTokens()) {
+            cmd.add(tokens.nextToken());
         }
     }
 
@@ -228,6 +429,15 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
         }
 
         return serviceURL;
+    }
+
+    private void startAgent(VirtualMachine wlpvm) throws IOException {
+        String agent = wlpvm.getSystemProperties().getProperty("java.home") + File.separator + "lib" + File.separator + "management-agent.jar";
+        try {
+            wlpvm.loadAgent(agent);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private String findVirtualMachineIdByName(String serverName) {
@@ -308,7 +518,7 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
 
             // Return metadata on how to contact the deployed application
             ProtocolMetaData metaData = new ProtocolMetaData();
-            HTTPContext httpContext = new HTTPContext("localhost", getHttpPort());
+            HTTPContext httpContext = new HTTPContext("localhost", containerConfiguration.getHttpPort());
             httpContext.add(new Servlet("ArquillianServletRunner", deployName));
             metaData.addContext(httpContext);
 
@@ -320,59 +530,6 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
         } catch (Exception e) {
             throw new DeploymentException("Exception while deploying application.", e);
         }
-    }
-
-    private int getHttpPort() throws DeploymentException {
-        if (log.isLoggable(Level.FINER)) {
-            log.entering(className, "getHttpPort");
-        }
-
-        int httpPort = containerConfiguration.getHttpPort();
-
-        if (httpPort == 0)
-            httpPort = getHttpPortFromChannelFWMBean("defaultHttpEndpoint");
-
-        if (log.isLoggable(Level.FINER)) {
-            log.exiting(className, "getHttpPort", httpPort);
-        }
-        return httpPort;
-    }
-
-    // Returns the HttpPort configured on the Channel Framework MBean with the
-    // provided endpoint name
-    private int getHttpPortFromChannelFWMBean(String endpointName) throws DeploymentException {
-        if (log.isLoggable(Level.FINER)) {
-            log.entering(className, "getHttpPortFromChannelFWMBean", endpointName);
-        }
-
-        ObjectName endpointMBean = null;
-        try {
-            endpointMBean = new ObjectName("WebSphere:feature=channelfw,type=endpoint,name=" + endpointName);
-        } catch (MalformedObjectNameException e) {
-            throw new DeploymentException("The generated object name is wrong. The endpointName used was '" + endpointName + "'", e);
-        } catch (NullPointerException e) {
-            // This should never happen given that the name parameter to the
-            // ObjectName constructor above can never be null
-            throw new DeploymentException("This should never happen", e);
-        }
-
-        int httpPort;
-
-        try {
-            if (!mbsc.isRegistered(endpointMBean))
-                throw new DeploymentException("The Channel Framework MBean with endpointName '" + endpointName + "' does not exist.");
-
-            httpPort = ((Integer) mbsc.getAttribute(endpointMBean, "Port")).intValue();
-            log.finer("httpPort: " + httpPort);
-        } catch (Exception e) {
-            throw new DeploymentException("Exception while retrieving httpPort information from Channel Framework MBean. "
-                    + "The httpPort can also be manually configured in the arquillian container configuration.", e);
-        }
-
-        if (log.isLoggable(Level.FINER)) {
-            log.exiting(className, "getHttpPortFromChannelFWMBean", httpPort);
-        }
-        return httpPort;
     }
 
     public void undeploy(final Archive<?> archive) throws DeploymentException {
@@ -622,9 +779,9 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
 
     /**
      * Runnable that consumes the output of the process. If nothing consumes the
-     * output the process will hang on some platforms
-     * Implementation from wildfly's ManagedDeployableContainer.java
-     *
+     * output the process will hang on some platforms Implementation from
+     * wildfly's ManagedDeployableContainer.java
+     * 
      * @author Stuart Douglas
      */
     private class ConsoleConsumer implements Runnable {

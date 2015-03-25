@@ -23,7 +23,7 @@ import org.jboss.arquillian.container.spi.client.container.ContainerConfiguratio
 
 /**
  * WLPManagedContainerConfiguration
- *
+ * 
  * @author <a href="mailto:gerhard.poul@gmail.com">Gerhard Poul</a>
  * @version $Revision: $
  */
@@ -33,7 +33,7 @@ public class WLPManagedContainerConfiguration implements ContainerConfiguration 
 
     private String serverName = "defaultServer";
 
-    private int httpPort = 0;
+    private int httpPort = 9080;
 
     private int serverStartTimeout = 30;
 
@@ -45,7 +45,15 @@ public class WLPManagedContainerConfiguration implements ContainerConfiguration 
 
     private String deployType = "dropins";
 
-    private String javaVmArguments = "";
+    private String launchJvmParams = "";
+
+    public String getLaunchJvmParams() {
+        return launchJvmParams;
+    }
+
+    public void setLaunchJvmParams(String launchJvmParams) {
+        this.launchJvmParams = launchJvmParams;
+    }
 
     private boolean allowConnectingToRunningServer = Boolean.parseBoolean(System.getProperty(
             "org.jboss.arquillian.container.was.wlp_managed_8_5.allowConnectingToRunningServer", "false"));
@@ -57,6 +65,10 @@ public class WLPManagedContainerConfiguration implements ContainerConfiguration 
         // Validate wlpHome
         if (wlpHome != null) {
             File wlpHomeDir = new File(wlpHome);
+            if (!wlpHomeDir.isAbsolute()) {
+                wlpHome = wlpHomeDir.getAbsolutePath();
+                wlpHomeDir = new File(wlpHome);
+            }
             File bsAgentJar = new File(wlpHome + "/lib/bootstrap-agent.jar");
             File wsLaunchJar = new File(wlpHome + "/lib/ws-launch.jar");
             if (!(wlpHomeDir.isDirectory() && bsAgentJar.isFile() && wsLaunchJar.isFile()))
@@ -71,7 +83,7 @@ public class WLPManagedContainerConfiguration implements ContainerConfiguration 
             throw new ConfigurationException("serverName provided is not valid: '" + serverName + "'");
 
         // Validate httpPort
-        if (httpPort > 65535 || httpPort < 0)
+        if (httpPort > 65535 || httpPort <= 0)
             throw new ConfigurationException("httpPort provided is not valid: " + httpPort);
 
         // Validate deployType
@@ -179,13 +191,5 @@ public class WLPManagedContainerConfiguration implements ContainerConfiguration 
             return true;
         else
             return false;
-    }
-
-    public String getJavaVmArguments() {
-        return javaVmArguments;
-    }
-
-    public void setJavaVmArguments(String javaVmArguments) {
-        this.javaVmArguments = javaVmArguments;
     }
 }
