@@ -312,7 +312,7 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
                     }
                 }
                 pb.directory(new File(containerConfiguration.getWlpHome()));
-                pb.redirectErrorStream();
+                pb.redirectErrorStream(true);
                 wlpProcess = pb.start();
 
                 new Thread(new ConsoleConsumer()).start();
