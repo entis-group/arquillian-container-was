@@ -3,7 +3,7 @@
  * Copyright 2012, 2013, Red Hat Middleware LLC, and individual contributors
  * by the @authors tag. See the copyright.txt in the distribution for a
  * full listing of individual contributors.
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -27,158 +27,165 @@ import org.jboss.arquillian.container.spi.client.container.ContainerConfiguratio
  * @author <a href="mailto:gerhard.poul@gmail.com">Gerhard Poul</a>
  * @version $Revision: $
  */
-public class WLPManagedContainerConfiguration implements
-      ContainerConfiguration {
-   
-   private String wlpHome;
-   private String serverName = "defaultServer";
-   private int httpPort = 0;
-   private int serverStartTimeout = 30;
-   private int appDeployTimeout = 20;
-   private int appUndeployTimeout = 2;
-   private String sharedLib = null;
-   private String deployType = "dropins";
-   private String javaVmArguments = "";
+public class WLPManagedContainerConfiguration implements ContainerConfiguration {
 
-   private boolean allowConnectingToRunningServer = Boolean.parseBoolean(
-         System.getProperty("org.jboss.arquillian.container.was.wlp_managed_8_5.allowConnectingToRunningServer",  "false"));
-   
-   private boolean outputToConsole = true;
-   
-   @Override
-   public void validate() throws ConfigurationException {
-      // Validate wlpHome
-      if (wlpHome != null) {
-         File wlpHomeDir = new File(wlpHome);
-         File bsAgentJar = new File(wlpHome + "/lib/bootstrap-agent.jar");
-         File wsLaunchJar = new File(wlpHome + "/lib/ws-launch.jar");
-         if (!(wlpHomeDir.isDirectory() && bsAgentJar.isFile() && wsLaunchJar.isFile()))
-            throw new ConfigurationException("wlpHome provided is not valid: " + wlpHome);
-      } else {
-         // If wlpHome is null, throw exception
-         throw new ConfigurationException("wlpHome is required for initialization");
-      }
-      
-      // Validate serverName
-      if (!serverName.matches("^[A-Za-z][A-Za-z0-9]*$"))
-         throw new ConfigurationException("serverName provided is not valid: '" + serverName + "'");
-      
-      // Validate httpPort
-      if (httpPort > 65535 || httpPort < 0)
-         throw new ConfigurationException("httpPort provided is not valid: " + httpPort);
+    private String wlpHome;
 
-      // Validate deployType
-      if (!deployType.equalsIgnoreCase("xml") && !deployType.equalsIgnoreCase("dropins"))
-         throw new ConfigurationException("deployType provided is not valid: " + deployType + ".  deployType should be xml or dropins.");
+    private String serverName = "defaultServer";
 
-      //Validate sharedLib
-      if (sharedLib != null) {
-         if (!sharedLib.isEmpty()) {
-            if (!deployType.equalsIgnoreCase("xml"))
-               throw new ConfigurationException("deployType must be set to xml when sharedLib is not empty");
-         }
-      }
-   }
+    private int httpPort = 0;
 
-   public String getWlpHome() {
-      return wlpHome;
-   }
+    private int serverStartTimeout = 30;
 
-   public void setWlpHome(String wlpHome) {
-      this.wlpHome = wlpHome;
-   }
+    private int appDeployTimeout = 20;
 
-   public String getServerName() {
-      return serverName;
-   }
+    private int appUndeployTimeout = 2;
 
-   public void setServerName(String serverName) {
-      this.serverName = serverName;
-   }
+    private String sharedLib = null;
 
-   public int getHttpPort() {
-      return httpPort;
-   }
+    private String deployType = "dropins";
 
-   public void setHttpPort(int httpPort) {
-      this.httpPort = httpPort;
-   }
+    private String javaVmArguments = "";
 
-   public void setSharedLib(String sharedLib) {
-      this.sharedLib = sharedLib;
-   }
+    private boolean allowConnectingToRunningServer = Boolean.parseBoolean(System.getProperty(
+            "org.jboss.arquillian.container.was.wlp_managed_8_5.allowConnectingToRunningServer", "false"));
 
-   public String getSharedLib() {
-      return sharedLib;
-   }
+    private boolean outputToConsole = true;
 
-   public void setDeployType(String deployType) {
-      this.deployType = deployType;
-   }
+    @Override
+    public void validate() throws ConfigurationException {
+        // Validate wlpHome
+        if (wlpHome != null) {
+            File wlpHomeDir = new File(wlpHome);
+            File bsAgentJar = new File(wlpHome + "/lib/bootstrap-agent.jar");
+            File wsLaunchJar = new File(wlpHome + "/lib/ws-launch.jar");
+            if (!(wlpHomeDir.isDirectory() && bsAgentJar.isFile() && wsLaunchJar.isFile()))
+                throw new ConfigurationException("wlpHome provided is not valid: " + wlpHome);
+        } else {
+            // If wlpHome is null, throw exception
+            throw new ConfigurationException("wlpHome is required for initialization");
+        }
 
-   public String getDeployType() {
-      return deployType;
-   }
+        // Validate serverName
+        if (!serverName.matches("^[A-Za-z][A-Za-z0-9]*$"))
+            throw new ConfigurationException("serverName provided is not valid: '" + serverName + "'");
 
-   public boolean isAllowConnectingToRunningServer() {
-      return allowConnectingToRunningServer;
-   }
+        // Validate httpPort
+        if (httpPort > 65535 || httpPort < 0)
+            throw new ConfigurationException("httpPort provided is not valid: " + httpPort);
 
-   public void setAllowConnectingToRunningServer(boolean allowConnectingToRunningServer) {
-       this.allowConnectingToRunningServer = allowConnectingToRunningServer;
-   }
+        // Validate deployType
+        if (!deployType.equalsIgnoreCase("xml") && !deployType.equalsIgnoreCase("dropins"))
+            throw new ConfigurationException("deployType provided is not valid: " + deployType + ".  deployType should be xml or dropins.");
 
-   public boolean isOutputToConsole() {
-      return outputToConsole;
-   }
+        // Validate sharedLib
+        if (sharedLib != null) {
+            if (!sharedLib.isEmpty()) {
+                if (!deployType.equalsIgnoreCase("xml"))
+                    throw new ConfigurationException("deployType must be set to xml when sharedLib is not empty");
+            }
+        }
+    }
 
-   public void setOutputToConsole(boolean outputToConsole) {
-      this.outputToConsole = outputToConsole;
-   }
-   
-   public int getServerStartTimeout() {
-      return serverStartTimeout;
-   }
+    public String getWlpHome() {
+        return wlpHome;
+    }
 
-   public void setServerStartTimeout(int serverStartTimeout) {
-      this.serverStartTimeout = serverStartTimeout;
-   }
+    public void setWlpHome(String wlpHome) {
+        this.wlpHome = wlpHome;
+    }
 
-   public int getAppDeployTimeout() {
-      return appDeployTimeout;
-   }
+    public String getServerName() {
+        return serverName;
+    }
 
-   public void setAppDeployTimeout(int appDeployTimeout) {
-      this.appDeployTimeout = appDeployTimeout;
-   }
+    public void setServerName(String serverName) {
+        this.serverName = serverName;
+    }
 
-   public int getAppUndeployTimeout() {
-      return appUndeployTimeout;
-   }
+    public int getHttpPort() {
+        return httpPort;
+    }
 
-   public void setAppUndeployTimeout(int appUndeployTimeout) {
-      this.appUndeployTimeout = appUndeployTimeout;
-   }
+    public void setHttpPort(int httpPort) {
+        this.httpPort = httpPort;
+    }
 
-   public boolean isDeployTypeXML() {
-      if (deployType.equalsIgnoreCase("xml"))
-         return true;
-      else
-         return false;
-   }
+    public void setSharedLib(String sharedLib) {
+        this.sharedLib = sharedLib;
+    }
 
-   public boolean isDeployTypeDropins() {
-      if (deployType.equalsIgnoreCase("dropins"))
-         return true;
-      else
-         return false;
-   }
+    public String getSharedLib() {
+        return sharedLib;
+    }
 
-   public String getJavaVmArguments() {
-      return javaVmArguments;
-   }
+    public void setDeployType(String deployType) {
+        this.deployType = deployType;
+    }
 
-   public void setJavaVmArguments(String javaVmArguments) {
-      this.javaVmArguments = javaVmArguments;
-   }
+    public String getDeployType() {
+        return deployType;
+    }
+
+    public boolean isAllowConnectingToRunningServer() {
+        return allowConnectingToRunningServer;
+    }
+
+    public void setAllowConnectingToRunningServer(boolean allowConnectingToRunningServer) {
+        this.allowConnectingToRunningServer = allowConnectingToRunningServer;
+    }
+
+    public boolean isOutputToConsole() {
+        return outputToConsole;
+    }
+
+    public void setOutputToConsole(boolean outputToConsole) {
+        this.outputToConsole = outputToConsole;
+    }
+
+    public int getServerStartTimeout() {
+        return serverStartTimeout;
+    }
+
+    public void setServerStartTimeout(int serverStartTimeout) {
+        this.serverStartTimeout = serverStartTimeout;
+    }
+
+    public int getAppDeployTimeout() {
+        return appDeployTimeout;
+    }
+
+    public void setAppDeployTimeout(int appDeployTimeout) {
+        this.appDeployTimeout = appDeployTimeout;
+    }
+
+    public int getAppUndeployTimeout() {
+        return appUndeployTimeout;
+    }
+
+    public void setAppUndeployTimeout(int appUndeployTimeout) {
+        this.appUndeployTimeout = appUndeployTimeout;
+    }
+
+    public boolean isDeployTypeXML() {
+        if (deployType.equalsIgnoreCase("xml"))
+            return true;
+        else
+            return false;
+    }
+
+    public boolean isDeployTypeDropins() {
+        if (deployType.equalsIgnoreCase("dropins"))
+            return true;
+        else
+            return false;
+    }
+
+    public String getJavaVmArguments() {
+        return javaVmArguments;
+    }
+
+    public void setJavaVmArguments(String javaVmArguments) {
+        this.javaVmArguments = javaVmArguments;
+    }
 }
