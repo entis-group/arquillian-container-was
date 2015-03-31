@@ -88,11 +88,21 @@
 		</profile>
 	</profiles>
 
+
 	<distributionManagement>
 		<repository>
 			<id>statistik</id>
 			<name>statistik-release</name>
-			<url>https://entis/artifactory/statistik-3rd-party-release</url>
+			<url>${statistikrepo}/statistik-3rd-party-release/</url>
 		</repository>
+		<snapshotRepository>
+			<id>statistik-snapshot</id>
+			<name>statistik-snapshot</name>
+			<url>${statistikrepo}/statistik-3rd-party-snapshot/</url>
+		</snapshotRepository>
+		<site>
+			<id>siteserver</id>
+			<url>dav:http://linux67/projects/entis/${project.artifactId}/${project.version}</url>
+		</site>
 	</distributionManagement>
 </project>
