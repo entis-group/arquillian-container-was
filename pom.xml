@@ -16,7 +16,7 @@
 	<!-- Artifact Configuration -->
 	<groupId>org.jboss.arquillian.container</groupId>
 	<artifactId>arquillian-parent-was</artifactId>
-	<version>1.0.0.Statistik-1</version>
+	<version>1.0.0.Statistik-2</version>
 	<packaging>pom</packaging>
 	<name>Arquillian Container Parent WebSphere AS</name>
 	<description>WebSphere AS Container integrations for the Arquillian Project</description>
