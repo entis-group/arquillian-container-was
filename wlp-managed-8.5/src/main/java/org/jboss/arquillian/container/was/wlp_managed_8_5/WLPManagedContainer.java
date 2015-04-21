@@ -91,22 +91,13 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
 
     int jmxPort = -1;
 
-    int h2Port = -1;
-
     public void setup(WLPManagedContainerConfiguration configuration) {
         if (log.isLoggable(Level.FINER)) {
             log.entering(className, "setup");
         }
         this.containerConfiguration = configuration;
         if (this.containerConfiguration.getHttpPort() == 1) {
-
-            if (Boolean.TRUE.toString().equalsIgnoreCase(System.getProperty("isJenkins", "false"))) {
-                httpPort = findFreePort();
-                httpsPort = findFreePort();
-                h2Port = findFreePort();
-                this.containerConfiguration.setHttpPort(httpPort);
-                adaptEnvFile(httpPort, httpsPort, h2Port);
-            }
+            adaptEnvFile();
         }
         jmxPort = findFreePort();
         adaptJvmOptionsFile(jmxPort);
@@ -162,39 +153,47 @@ public class WLPManagedContainer implements DeployableContainer<WLPManagedContai
         outFile.write('\n');
     }
 
-    private void adaptEnvFile(int httpPort, int httpsPort, int h2Port) {
+    private void adaptEnvFile() {
         try {
             File envFile = new File(containerConfiguration.getWlpHome() + "/usr/servers/" + containerConfiguration.getServerName() + "/server.env");
             String fileContents = readFileContents(envFile);
             StringTokenizer tokens = new StringTokenizer(fileContents, "\n");
             FileOutputStream outFile = new FileOutputStream(envFile);
-            boolean h2PortSet = false;
-            boolean httpPortSet = false;
-            boolean httpsPortSet = false;
             while (tokens.hasMoreTokens()) {
                 String line = tokens.nextToken().trim();
-                if (line.startsWith("STAT_H2_PORT")) {
-                    h2PortSet = true;
-                    writeEnvLine("STAT_H2_PORT", Integer.toString(h2Port), outFile);
-                } else if (line.startsWith("STAT_WLP_HTTP_PORT")) {
-                    httpPortSet = true;
-                    writeEnvLine("STAT_WLP_HTTP_PORT", Integer.toString(httpPort), outFile);
-                } else if (line.startsWith("STAT_WLP_HTTPS_PORT")) {
-                    httpsPortSet = true;
-                    writeEnvLine("STAT_WLP_HTTPS_PORT", Integer.toString(httpsPort), outFile);
-                } else {
+                int equalIndex = line.indexOf('=');
+                String key = null;
+                if (equalIndex >= 0) {
+                    key = line.substring(0, equalIndex).trim();
+                    String value = line.substring(equalIndex + 1).trim();
+                    if (key.endsWith("_PORT")) {
+                        if (key.indexOf("_HTTP_") >= 0) {
+                            if (value.equalsIgnoreCase("NEW-FREE")) {
+                                this.httpPort = findFreePort();
+                                this.containerConfiguration.setHttpPort(httpPort);
+                            } else {
+                                this.httpPort = Integer.parseInt(value);
+                                this.containerConfiguration.setHttpPort(httpPort);
+                            }
+                            writeEnvLine(key, Integer.toString(httpPort), outFile);
+                        } else if (key.indexOf("_HTTPS_") >= 0) {
+                            if (value.equalsIgnoreCase("NEW-FREE")) {
+                                this.httpsPort = findFreePort();
+                            } else {
+                                this.httpsPort = Integer.parseInt(value);
+                            }
+                            writeEnvLine(key, Integer.toString(httpsPort), outFile);
+                        } else if (value.equalsIgnoreCase("NEW-FREE")) {
+                            writeEnvLine(key, Integer.toString(findFreePort()), outFile);
+                        }
+                    } else {
+                        key = null;
+                    }
+                }
+                if (key == null) {
                     outFile.write(line.getBytes("UTF-8"));
                     outFile.write('\n');
                 }
-            }
-            if (!h2PortSet) {
-                writeEnvLine("STAT_H2_PORT", Integer.toString(h2Port), outFile);
-            }
-            if (!httpPortSet) {
-                writeEnvLine("STAT_WLP_HTTP_PORT", Integer.toString(httpPort), outFile);
-            }
-            if (!httpsPortSet) {
-                writeEnvLine("STAT_WLP_HTTPS_PORT", Integer.toString(httpsPort), outFile);
             }
             outFile.close();
         } catch (Exception e) {

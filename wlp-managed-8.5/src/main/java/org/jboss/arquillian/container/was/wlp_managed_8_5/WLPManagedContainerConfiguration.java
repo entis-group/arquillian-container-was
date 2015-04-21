@@ -83,7 +83,7 @@ public class WLPManagedContainerConfiguration implements ContainerConfiguration 
             throw new ConfigurationException("serverName provided is not valid: '" + serverName + "'");
 
         // Validate httpPort
-        if (httpPort > 65535 || httpPort <= 0)
+        if (httpPort > 65535 || httpPort < 1)
             throw new ConfigurationException("httpPort provided is not valid: " + httpPort);
 
         // Validate deployType
